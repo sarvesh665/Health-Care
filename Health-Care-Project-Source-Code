@@ -1,0 +1,204 @@
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+#include "MAX30100_PulseOximeter.h"
+ #define BLYNK_TEMPLATE_ID           "TMPL3cTnRM7xk"
+#define BLYNK_TEMPLATE_NAME         "Quickstart Template"
+#define BLYNK_AUTH_TOKEN            "VqDDbmayxaKJq78_Q6O6h8TanfyPQg1I"
+
+/* Comment this out to disable prints and save space */
+#define BLYNK_PRINT Serial
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+Adafruit_MPU6050 mpu;
+// Your WiFi credentials.
+// Set password to "" for open networks.
+char ssid[] = "anmol";
+char pass[] = "12345678";
+float xa1,ya1,ta1;
+BlynkTimer timer;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+ 
+#define REPORTING_PERIOD_MS     1000
+ 
+PulseOximeter pox;
+uint32_t tsLastReport = 0;
+ 
+void onBeatDetected()
+{
+    Serial.println("Beat!");
+}
+void myTimerEvent()
+{
+  // You can send any value at any time.
+  // Please don't send more that 10 values per second.
+  //Blynk.virtualWrite(V2, millis() / 1000);
+} 
+void setup()
+{
+    lcd.begin();
+  lcd.backlight();
+   Serial.begin(115200);
+    Serial.print("Initializing pulse oximeter..");
+    //lcd.begin(16,2);
+    lcd.print("Initializing...");
+    delay(3000);
+    lcd.clear();
+ Serial.begin(115200);
+mpusetup();
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+    // Initialize the PulseOximeter instance
+    // Failures are generally due to an improper I2C wiring, missing power supply
+    // or wrong target chip
+    if (!pox.begin()) {
+        Serial.println("FAILED");
+        for(;;);
+    } else {
+        Serial.println("SUCCESS");
+    }
+     pox.setIRLedCurrent(MAX30100_LED_CURR_7_6MA);
+ 
+    // Register a callback for the beat detection
+    pox.setOnBeatDetectedCallback(onBeatDetected);
+     timer.setInterval(1000L, myTimerEvent);
+     
+}
+
+
+
+ void mpusetup()
+ {
+    Serial.println("Adafruit MPU6050 test!");
+
+  // Try to initialize!
+  if (!mpu.begin()) {
+    Serial.println("Failed to find MPU6050 chip");
+    while (1) {
+      delay(10);
+    }
+  }
+  Serial.println("MPU6050 Found!");
+
+  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+  Serial.print("Accelerometer range set to: ");
+  switch (mpu.getAccelerometerRange()) {
+  case MPU6050_RANGE_2_G:
+    Serial.println("+-2G");
+    break;
+  case MPU6050_RANGE_4_G:
+    Serial.println("+-4G");
+    break;
+  case MPU6050_RANGE_8_G:
+    Serial.println("+-8G");
+    break;
+  case MPU6050_RANGE_16_G:
+    Serial.println("+-16G");
+    break;
+  }
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  Serial.print("Gyro range set to: ");
+  switch (mpu.getGyroRange()) {
+  case MPU6050_RANGE_250_DEG:
+    Serial.println("+- 250 deg/s");
+    break;
+  case MPU6050_RANGE_500_DEG:
+    Serial.println("+- 500 deg/s");
+    break;
+  case MPU6050_RANGE_1000_DEG:
+    Serial.println("+- 1000 deg/s");
+    break;
+  case MPU6050_RANGE_2000_DEG:
+    Serial.println("+- 2000 deg/s");
+    break;
+  }
+
+  mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
+  Serial.print("Filter bandwidth set to: ");
+  switch (mpu.getFilterBandwidth()) {
+  case MPU6050_BAND_260_HZ:
+    Serial.println("260 Hz");
+    break;
+  case MPU6050_BAND_184_HZ:
+    Serial.println("184 Hz");
+    break;
+  case MPU6050_BAND_94_HZ:
+    Serial.println("94 Hz");
+    break;
+  case MPU6050_BAND_44_HZ:
+    Serial.println("44 Hz");
+    break;
+  case MPU6050_BAND_21_HZ:
+    Serial.println("21 Hz");
+    break;
+  case MPU6050_BAND_10_HZ:
+    Serial.println("10 Hz");
+    break;
+  case MPU6050_BAND_5_HZ:
+    Serial.println("5 Hz");
+    break;
+  }
+
+  Serial.println("");
+  delay(100);
+ }
+void loop()
+{
+    for(int i=0;i<10;i++)
+    {// Make sure to call update as fast as possible
+    pox.update();
+    if (millis() - tsLastReport > REPORTING_PERIOD_MS) {
+        Serial.print("Heart rate:");
+        Serial.print(pox.getHeartRate());
+        Serial.print("bpm / SpO2:");
+        Serial.print(pox.getSpO2());
+        Serial.println("%");
+ 
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("BPM : ");
+        int ch1=pox.getHeartRate();
+        lcd.print(ch1);
+        
+        lcd.setCursor(0,1);
+        lcd.print("SpO2: ");
+        lcd.print(pox.getSpO2());
+        lcd.print("%");
+        Blynk.run();
+        timer.run();
+        Blynk.virtualWrite(V2, ch1);
+        Blynk.virtualWrite(V6,pox.getSpO2());
+         tsLastReport = millis();
+        
+}
+ 
+}
+mpuread();
+} 
+ void mpuread()
+ {
+  sensors_event_t a, g, temp;
+         mpu.getEvent(&a, &g, &temp);
+         xa1=a.acceleration.x;
+         ya1=a.acceleration.y;
+         Serial.print(xa1);
+         Serial.print("    ");
+         Serial.println(ya1);
+         if(xa1>1||xa1<-1||ya1>1||ya1<-1)
+         {
+          lcd.setCursor(10,1);
+          lcd.print("Motion");
+          Blynk.virtualWrite(V1, 1);
+         }
+         else
+         {
+          lcd.setCursor(10,1);
+          lcd.print("None");
+          Blynk.virtualWrite(V1, 0);
+         }
+         ta1=temp.temperature;
+          lcd.setCursor(10,0);
+          lcd.print(ta1);
+          Blynk.virtualWrite(V3, ta1);
+          
+         }
